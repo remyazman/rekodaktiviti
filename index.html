@@ -375,6 +375,9 @@
 
             let error;
             
+            // SIMPAN STATUS SEBELUM RESET
+            const isEditMode = editId ? true : false;
+
             if (editId) {
                 // UPDATE
                 const { error: updateError } = await supabaseClient
@@ -396,7 +399,7 @@
             if (error) {
                 Swal.fire('Gagal!', error.message, 'error');
             } else {
-                const action = editId ? 'dikemaskini' : 'disimpan';
+                const action = isEditMode ? 'dikemaskini' : 'disimpan';
                 
                 await Swal.fire({
                     icon: 'success',
@@ -407,7 +410,11 @@
                 });
 
                 resetForm(); 
-                if(editId) switchTab('list'); 
+                
+                // JIKA IA ADALAH EDIT, KEMBALI KE TAB SENARAI
+                if(isEditMode) {
+                    switchTab('list'); 
+                }
             }
         });
 
