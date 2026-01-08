@@ -309,6 +309,7 @@
                 formContent.classList.add('hidden');
                 listContent.classList.remove('hidden');
                 
+                // Panggil fetch data setiap kali buka tab senarai untuk pastikan data terkini
                 fetchData();
             }
         }
@@ -324,8 +325,8 @@
             btn.innerText = editId ? "Sedang Kemaskini..." : "Sedang Simpan...";
             btn.disabled = true;
 
-            const formData = {
-                user_id: currentUser.id,
+            // Sediakan objek data asas
+            const payload = {
                 jenis_aktiviti: document.getElementById('jenis_aktiviti').value,
                 lokasi: document.getElementById('lokasi').value,
                 tarikh: document.getElementById('tarikh').value,
@@ -339,16 +340,22 @@
             
             if (editId) {
                 // UPDATE
+                // Nota Teknikal: Kita TIDAK hantar 'user_id' semasa update untuk elak isu RLS.
+                // Supabase akan tahu rekod ini milik siapa berdasarkan ID dan token auth.
+                
                 const { error: updateError } = await supabaseClient
                     .from('log_ustp')
-                    .update(formData)
+                    .update(payload)
                     .eq('id', editId);
                 error = updateError;
             } else {
                 // INSERT
+                // Kita mesti masukkan 'user_id' untuk rekod baru
+                payload.user_id = currentUser.id;
+                
                 const { error: insertError } = await supabaseClient
                     .from('log_ustp')
-                    .insert([formData]);
+                    .insert([payload]);
                 error = insertError;
             }
 
@@ -356,7 +363,8 @@
             btn.disabled = false;
 
             if (error) {
-                Swal.fire('Gagal!', error.message, 'error');
+                console.error("Supabase Error:", error); // Untuk debugging
+                Swal.fire('Gagal!', 'Sila semak konsol atau polisi RLS anda. Mesej: ' + error.message, 'error');
             } else {
                 const action = editId ? 'dikemaskini' : 'disimpan';
                 
@@ -369,8 +377,6 @@
                 });
 
                 resetForm(); 
-                // Jika update, kembali ke senarai. Jika insert, kekal di borang untuk entri seterusnya (optional).
-                // Di sini saya kekalkan logik asal: Update -> List, Insert -> Stay (tapi borang kosong).
                 if(editId) switchTab('list'); 
             }
         });
@@ -546,6 +552,7 @@
             });
 
             if (result.isConfirmed) {
+                // DELETE
                 const { error } = await supabaseClient
                     .from('log_ustp')
                     .delete()
