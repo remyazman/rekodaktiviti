@@ -35,20 +35,6 @@
 </head>
 <body class="bg-gray-50 min-h-screen font-sans">
 
-    <!-- KONFIGURASI SUPABASE -->
-    <script>
-        // NOTA PENTING: Gantikan 'SUPABASE_KEY' dengan 'anon public key' yang sebenar dari dashboard anda.
-        // Key yang anda berikan (sb_publishable...) mungkin tidak lengkap. 
-        // Sila semak di Project Settings > API > Project API keys > anon public.
-        
-        const supabaseUrl = 'https://orfvatacivcnzzhxhtbp.supabase.co';
-        // Sila masukkan KEY PENUH di sini jika kod di bawah gagal.
-        const supabaseKey = 'sb_publishable_8HYoJecsafWQSSpisJeXgw_4L-qR18b'; 
-        
-        // Inisialisasi Klien
-        const supabase = supabase.createClient(supabaseUrl, supabaseKey);
-    </script>
-
     <!-- HALAMAN LOG MASUK -->
     <div id="login-page" class="flex items-center justify-center min-h-screen px-4">
         <div class="bg-white p-8 rounded-lg shadow-lg max-w-md w-full border-t-4 border-blue-600">
@@ -194,14 +180,22 @@
         </div>
     </div>
 
-    <!-- LOGIK JAVASCRIPT -->
+    <!-- LOGIK JAVASCRIPT GABUNGAN -->
     <script>
+        // --- KONFIGURASI SUPABASE ---
+        // Kita namakan variable ini 'supabaseClient' untuk elak konflik dengan library 'supabase'
+        
+        const supabaseUrl = 'https://orfvatacivcnzzhxhtbp.supabase.co';
+        const supabaseKey = 'sb_publishable_8HYoJecsafWQSSpisJeXgw_4L-qR18b'; 
+        
+        const supabaseClient = supabase.createClient(supabaseUrl, supabaseKey);
+
         let currentUser = null;
 
         // --- 1. PENGURUSAN LOG MASUK/KELUAR ---
         
         async function checkUser() {
-            const { data: { session } } = await supabase.auth.getSession();
+            const { data: { session } } = await supabaseClient.auth.getSession();
             if (session) {
                 currentUser = session.user;
                 showApp();
@@ -210,8 +204,8 @@
             }
         }
 
-        // Dengar perubahan status auth (login/logout)
-        supabase.auth.onAuthStateChange((event, session) => {
+        // Dengar perubahan status auth
+        supabaseClient.auth.onAuthStateChange((event, session) => {
             if (event === 'SIGNED_IN') {
                 currentUser = session.user;
                 showApp();
@@ -245,7 +239,7 @@
             
             errorDiv.classList.add('hidden');
             
-            const { data, error } = await supabase.auth.signInWithPassword({
+            const { data, error } = await supabaseClient.auth.signInWithPassword({
                 email: email,
                 password: password,
             });
@@ -257,7 +251,7 @@
         });
 
         async function handleLogout() {
-            const { error } = await supabase.auth.signOut();
+            const { error } = await supabaseClient.auth.signOut();
             if (error) alert('Ralat log keluar');
         }
 
@@ -312,7 +306,7 @@
                 bilangan_guru: document.getElementById('bilangan_guru').value
             };
 
-            const { data, error } = await supabase
+            const { data, error } = await supabaseClient
                 .from('log_ustp')
                 .insert([formData]);
 
@@ -352,12 +346,12 @@
             const lastDay = new Date(year, month, 0).getDate(); 
             const endDate = `${year}-${month}-${lastDay}`;
 
-            const { data, error } = await supabase
+            const { data, error } = await supabaseClient
                 .from('log_ustp')
                 .select('*')
                 .gte('tarikh', startDate)
                 .lte('tarikh', endDate)
-                .eq('user_id', currentUser.id) // Pastikan tarik data user ni saja (double protection)
+                .eq('user_id', currentUser.id) // Pastikan tarik data user ni saja
                 .order('tarikh', { ascending: false });
 
             spinner.classList.add('hidden');
