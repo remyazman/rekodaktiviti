@@ -374,30 +374,48 @@
             };
 
             let error;
+            let data = null; // Variable untuk menampung data yang dipulangkan
             
             // SIMPAN STATUS SEBELUM RESET
             const isEditMode = editId ? true : false;
 
             if (editId) {
-                // UPDATE
-                const { error: updateError } = await supabaseClient
+                // UPDATE - WAJIB TAMBAH .select() UNTUK VERIFIKASI RLS
+                const response = await supabaseClient
                     .from('log_ustp')
                     .update(formData)
-                    .eq('id', editId);
-                error = updateError;
+                    .eq('id', editId)
+                    .select();
+                
+                error = response.error;
+                data = response.data;
+
             } else {
-                // INSERT
-                const { error: insertError } = await supabaseClient
+                // INSERT - WAJIB TAMBAH .select()
+                const response = await supabaseClient
                     .from('log_ustp')
-                    .insert([formData]);
-                error = insertError;
+                    .insert([formData])
+                    .select();
+
+                error = response.error;
+                data = response.data;
             }
 
             btn.innerText = originalText;
             btn.disabled = false;
 
             if (error) {
+                console.error("Supabase Error:", error);
                 Swal.fire('Gagal!', error.message, 'error');
+            } else if (data && data.length === 0) {
+                // INI ADALAH PENANGKAP ISU RLS UTAMA
+                console.warn("RLS Blocking: Tiada data dipulangkan selepas operasi.");
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Akses Ditolak (RLS)',
+                    text: 'Operasi berjaya dihantar tetapi tiada rekod berubah. Sila semak Policy (RLS) di Supabase untuk UPDATE/INSERT.',
+                    footer: 'Pastikan Policy "Enable Update for users based on user_id" aktif.'
+                });
             } else {
                 const action = isEditMode ? 'dikemaskini' : 'disimpan';
                 
@@ -462,14 +480,12 @@
                 return;
             }
 
-            // --- PENGIRAAN RUMUSAN (Dikemaskini untuk "Bimbingan" vs "Aktiviti") ---
+            // --- PENGIRAAN RUMUSAN ---
             const totalRekod = data.length;
             const totalBimbingan = data.filter(r => r.jenis_aktiviti === 'Bimbingan').length;
-            // Semua yang bukan Bimbingan akan dikira sebagai Aktiviti
             const totalAktiviti = totalRekod - totalBimbingan;
             
             updateSummary(totalRekod, totalBimbingan, totalAktiviti);
-            // ------------------------------
 
             data.forEach(row => {
                 const tr = document.createElement('tr');
@@ -477,6 +493,7 @@
                 const displayDate = dateObj.toLocaleDateString('ms-MY');
                 const badgeColor = row.jenis_aktiviti === 'Bimbingan' ? 'bg-indigo-100 text-indigo-800' : 'bg-green-100 text-green-800';
 
+                // PASTIKAN ID DIHANTAR SEBAGAI STRING ('${row.id}') UNTUK KESELAMATAN
                 tr.innerHTML = `
                     <td class="px-4 py-4 whitespace-nowrap">
                         <div class="text-sm font-medium text-gray-900">${displayDate}</div>
@@ -497,13 +514,13 @@
                         ${row.catatan}
                     </td>
                     <td class="px-4 py-4 whitespace-nowrap text-center text-sm font-medium">
-                        <button onclick="startEdit(${row.id})" class="text-blue-600 hover:text-blue-900 mx-1" title="Edit">
+                        <button onclick="startEdit('${row.id}')" class="text-blue-600 hover:text-blue-900 mx-1" title="Edit">
                             <i class="fas fa-edit fa-lg"></i>
                         </button>
-                        <button onclick="duplicateRecord(${row.id})" class="text-green-600 hover:text-green-900 mx-1" title="Salin & Buat Baru">
+                        <button onclick="duplicateRecord('${row.id}')" class="text-green-600 hover:text-green-900 mx-1" title="Salin & Buat Baru">
                             <i class="fas fa-copy fa-lg"></i>
                         </button>
-                        <button onclick="deleteRecord(${row.id})" class="text-red-600 hover:text-red-900 mx-1" title="Padam">
+                        <button onclick="deleteRecord('${row.id}')" class="text-red-600 hover:text-red-900 mx-1" title="Padam">
                             <i class="fas fa-trash-alt fa-lg"></i>
                         </button>
                     </td>
@@ -512,7 +529,6 @@
             });
         }
 
-        // FUNGSI PEMBANTU UNTUK UI RUMUSAN
         function updateSummary(total, bimbingan, aktiviti) {
             document.getElementById('summary-total').innerText = total;
             document.getElementById('summary-bimbingan').innerText = bimbingan;
@@ -521,9 +537,9 @@
 
         // C. Fungsi Tindakan (Edit, Duplicate, Delete)
 
-        // 1. EDIT: Mengemaskini rekod sedia ada
         window.startEdit = function(id) {
-            const record = currentRecords.find(r => r.id === id);
+            // PASTIKAN ID DIBANDINGKAN DENGAN BETUL (String vs Number issue solved by loose equality or cast)
+            const record = currentRecords.find(r => r.id == id);
             if (!record) return;
 
             populateForm(record);
@@ -540,14 +556,12 @@
             switchTab('form');
         }
 
-        // 2. DUPLICATE: Mengambil data lama, tapi simpan sebagai baru
         window.duplicateRecord = function(id) {
-            const record = currentRecords.find(r => r.id === id);
+            const record = currentRecords.find(r => r.id == id);
             if (!record) return;
 
             populateForm(record);
 
-            // PENTING: Set editId kepada null supaya ia INSERT, bukan UPDATE
             editId = null; 
 
             document.getElementById('form-title').innerText = "Salin Rekod (Simpan Sebagai Baru)";
@@ -609,13 +623,22 @@
             });
 
             if (result.isConfirmed) {
-                const { error } = await supabaseClient
+                // DELETE DENGAN .select() UNTUK VERIFIKASI RLS
+                const { data, error } = await supabaseClient
                     .from('log_ustp')
                     .delete()
-                    .eq('id', id);
+                    .eq('id', id)
+                    .select(); // PENTING
 
                 if (error) {
                     Swal.fire('Ralat', 'Gagal memadam: ' + error.message, 'error');
+                } else if (!data || data.length === 0) {
+                     // INI MENANGKAP SILENT FAILURE RLS
+                     Swal.fire({
+                        icon: 'error',
+                        title: 'Gagal Memadam (RLS)',
+                        text: 'Rekod tidak dipadam. Anda mungkin tiada kebenaran untuk memadam rekod ini (RLS DELETE Policy).',
+                    });
                 } else {
                     Swal.fire(
                         'Dipadam!',
