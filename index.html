@@ -112,7 +112,7 @@
                             <select id="jenis_aktiviti" class="w-full border rounded p-2 focus:ring-blue-500 focus:border-blue-500" required>
                                 <option value="">Sila Pilih</option>
                                 <option value="Bimbingan">Bimbingan</option>
-                                <option value="Aktiviti">Aktiviti Lain</option>
+                                <option value="Aktiviti">Aktiviti</option>
                             </select>
                         </div>
                         <div>
@@ -155,10 +155,10 @@
                 </form>
             </div>
 
-            <!-- KANDUNGAN: TAB SENARAI (DENGAN RUMUSAN BARU) -->
+            <!-- KANDUNGAN: TAB SENARAI (DENGAN RUMUSAN DIKEMASKINI) -->
             <div id="content-list" class="hidden bg-white p-6 rounded-b-lg shadow-md">
                 
-                <!-- BAHAGIAN RUMUSAN STATISTIK (BARU) -->
+                <!-- BAHAGIAN RUMUSAN STATISTIK -->
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
                     <!-- Kad 1: Jumlah Keseluruhan -->
                     <div class="bg-blue-50 p-4 rounded-lg border border-blue-200 shadow-sm flex items-center">
@@ -182,13 +182,13 @@
                         </div>
                     </div>
 
-                    <!-- Kad 3: Aktiviti Lain -->
+                    <!-- Kad 3: Aktiviti -->
                     <div class="bg-green-50 p-4 rounded-lg border border-green-200 shadow-sm flex items-center">
                         <div class="p-3 bg-green-500 rounded-full text-white mr-4">
                             <i class="fas fa-tasks fa-lg"></i>
                         </div>
                         <div>
-                            <p class="text-xs text-gray-500 uppercase font-bold">Aktiviti Lain</p>
+                            <p class="text-xs text-gray-500 uppercase font-bold">Aktiviti</p>
                             <h3 class="text-2xl font-bold text-green-800" id="summary-aktiviti">0</h3>
                         </div>
                     </div>
@@ -411,7 +411,7 @@
             }
         });
 
-        // B. Lihat Data (DIKEMASKINI DENGAN RUMUSAN)
+        // B. Lihat Data (DIKEMASKINI)
         async function fetchData() {
             const monthInput = document.getElementById('filter-month').value;
             if (!monthInput) return;
@@ -455,12 +455,13 @@
                 return;
             }
 
-            // --- PENGIRAAN RUMUSAN BARU ---
+            // --- PENGIRAAN RUMUSAN (Dikemaskini untuk "Bimbingan" vs "Aktiviti") ---
             const totalRekod = data.length;
             const totalBimbingan = data.filter(r => r.jenis_aktiviti === 'Bimbingan').length;
-            const totalLain = data.filter(r => r.jenis_aktiviti !== 'Bimbingan').length;
+            // Semua yang bukan Bimbingan akan dikira sebagai Aktiviti
+            const totalAktiviti = totalRekod - totalBimbingan;
             
-            updateSummary(totalRekod, totalBimbingan, totalLain);
+            updateSummary(totalRekod, totalBimbingan, totalAktiviti);
             // ------------------------------
 
             data.forEach(row => {
@@ -505,11 +506,10 @@
         }
 
         // FUNGSI PEMBANTU UNTUK UI RUMUSAN
-        function updateSummary(total, bimbingan, lain) {
-            // Kita gunakan animateNumber untuk efek visual (optional, tapi cantik)
+        function updateSummary(total, bimbingan, aktiviti) {
             document.getElementById('summary-total').innerText = total;
             document.getElementById('summary-bimbingan').innerText = bimbingan;
-            document.getElementById('summary-aktiviti').innerText = lain;
+            document.getElementById('summary-aktiviti').innerText = aktiviti;
         }
 
         // C. Fungsi Tindakan (Edit, Duplicate, Delete)
