@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistem Log USTP PPD Jasin</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Supabase JS -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- Font Awesome untuk Ikon -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        /* Animasi Loading */
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 2s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        
+        .tab-active {
+            border-bottom: 2px solid #2563eb;
+            color: #2563eb;
+            font-weight: bold;
+        }
+        .tab-inactive {
+            color: #6b7280;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen font-sans">
+
+    <!-- KONFIGURASI SUPABASE -->
+    <script>
+        // NOTA PENTING: Gantikan 'SUPABASE_KEY' dengan 'anon public key' yang sebenar dari dashboard anda.
+        // Key yang anda berikan (sb_publishable...) mungkin tidak lengkap. 
+        // Sila semak di Project Settings > API > Project API keys > anon public.
+        
+        const supabaseUrl = 'https://orfvatacivcnzzhxhtbp.supabase.co';
+        // Sila masukkan KEY PENUH di sini jika kod di bawah gagal.
+        const supabaseKey = 'sb_publishable_8HYoJecsafWQSSpisJeXgw_4L-qR18b'; 
+        
+        // Inisialisasi Klien
+        const supabase = supabase.createClient(supabaseUrl, supabaseKey);
+    </script>
+
+    <!-- HALAMAN LOG MASUK -->
+    <div id="login-page" class="flex items-center justify-center min-h-screen px-4">
+        <div class="bg-white p-8 rounded-lg shadow-lg max-w-md w-full border-t-4 border-blue-600">
+            <div class="text-center mb-6">
+                <h1 class="text-2xl font-bold text-gray-800">Log Masuk USTP</h1>
+                <p class="text-gray-500 text-sm">Sistem Perekodan Aktiviti Harian</p>
+            </div>
+            
+            <form id="login-form" class="space-y-4">
+                <div>
+                    <label class="block text-gray-700 text-sm font-bold mb-2">Emel MOE</label>
+                    <input type="email" id="email" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="nama@moe-dl.edu.my" required>
+                </div>
+                <div>
+                    <label class="block text-gray-700 text-sm font-bold mb-2">Kata Laluan</label>
+                    <input type="password" id="password" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="••••••" required>
+                </div>
+                <button type="submit" class="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition duration-300 font-bold">
+                    Log Masuk
+                </button>
+            </form>
+            <div id="login-error" class="mt-4 text-red-500 text-sm text-center hidden"></div>
+        </div>
+    </div>
+
+    <!-- HALAMAN UTAMA (DASHBOARD) -->
+    <div id="main-app" class="hidden">
+        <!-- Navbar -->
+        <nav class="bg-blue-800 text-white shadow-md">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex items-center justify-between h-16">
+                    <div class="flex items-center">
+                        <span class="font-bold text-lg"><i class="fas fa-book-reader mr-2"></i>Log USTP Jasin</span>
+                    </div>
+                    <div>
+                        <button onclick="handleLogout()" class="text-sm bg-blue-700 hover:bg-red-600 px-3 py-1 rounded transition">
+                            Log Keluar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <div class="max-w-4xl mx-auto mt-6 px-4 mb-10">
+            
+            <!-- Tab Navigation -->
+            <div class="flex border-b border-gray-200 mb-6 bg-white rounded-t-lg shadow-sm">
+                <button onclick="switchTab('form')" id="tab-btn-form" class="flex-1 py-4 px-6 text-center focus:outline-none tab-active">
+                    <i class="fas fa-pen-nib mr-2"></i>Rekod Baru
+                </button>
+                <button onclick="switchTab('list')" id="tab-btn-list" class="flex-1 py-4 px-6 text-center focus:outline-none tab-inactive">
+                    <i class="fas fa-list mr-2"></i>Senarai Aktiviti
+                </button>
+            </div>
+
+            <!-- KANDUNGAN: TAB BORANG -->
+            <div id="content-form" class="bg-white p-6 rounded-b-lg shadow-md">
+                <h2 class="text-xl font-bold mb-4 text-gray-800 border-b pb-2">Borang Aktiviti Harian</h2>
+                <form id="activity-form" class="space-y-4">
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Jenis Aktiviti</label>
+                            <select id="jenis_aktiviti" class="w-full border rounded p-2 focus:ring-blue-500 focus:border-blue-500" required>
+                                <option value="">Sila Pilih</option>
+                                <option value="Bimbingan">Bimbingan</option>
+                                <option value="Aktiviti">Aktiviti Lain</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Bilangan Guru Dibimbing</label>
+                            <input type="number" id="bilangan_guru" min="0" class="w-full border rounded p-2 focus:ring-blue-500 focus:border-blue-500" required>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Lokasi</label>
+                        <input type="text" id="lokasi" class="w-full border rounded p-2 focus:ring-blue-500 focus:border-blue-500" placeholder="Contoh: SK Air Baruk" required>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Tarikh</label>
+                            <input type="date" id="tarikh" class="w-full border rounded p-2 focus:ring-blue-500 focus:border-blue-500" required>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Masa</label>
+                            <input type="time" id="masa" class="w-full border rounded p-2 focus:ring-blue-500 focus:border-blue-500" required>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Catatan Aktiviti</label>
+                        <textarea id="catatan" rows="3" class="w-full border rounded p-2 focus:ring-blue-500 focus:border-blue-500" placeholder="Ringkasan aktiviti..." required></textarea>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Isu / Tindakan Susulan</label>
+                        <textarea id="isu" rows="2" class="w-full border rounded p-2 focus:ring-blue-500 focus:border-blue-500" placeholder="Jika tiada, tulis 'Tiada'" required></textarea>
+                    </div>
+
+                    <div class="pt-4">
+                        <button type="submit" id="submit-btn" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded shadow transition">
+                            Simpan Rekod
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- KANDUNGAN: TAB SENARAI -->
+            <div id="content-list" class="hidden bg-white p-6 rounded-b-lg shadow-md">
+                <div class="flex flex-col md:flex-row justify-between items-center mb-6">
+                    <h2 class="text-xl font-bold text-gray-800">Senarai Rekod</h2>
+                    <div class="flex items-center space-x-2 mt-2 md:mt-0">
+                        <label class="text-sm font-medium text-gray-600">Pilih Bulan:</label>
+                        <input type="month" id="filter-month" class="border rounded p-1 text-sm">
+                        <button onclick="fetchData()" class="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700">Lihat</button>
+                    </div>
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tarikh/Masa</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Aktiviti</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Lokasi</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Bil. Guru</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Catatan</th>
+                            </tr>
+                        </thead>
+                        <tbody id="table-body" class="bg-white divide-y divide-gray-200">
+                            <!-- Data akan masuk sini -->
+                        </tbody>
+                    </table>
+                    <div id="loading-spinner" class="hidden flex justify-center py-4">
+                        <div class="loader"></div>
+                    </div>
+                    <div id="no-data" class="hidden text-center py-4 text-gray-500">Tiada rekod dijumpai untuk bulan ini.</div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- LOGIK JAVASCRIPT -->
+    <script>
+        let currentUser = null;
+
+        // --- 1. PENGURUSAN LOG MASUK/KELUAR ---
+        
+        async function checkUser() {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session) {
+                currentUser = session.user;
+                showApp();
+            } else {
+                showLogin();
+            }
+        }
+
+        // Dengar perubahan status auth (login/logout)
+        supabase.auth.onAuthStateChange((event, session) => {
+            if (event === 'SIGNED_IN') {
+                currentUser = session.user;
+                showApp();
+            } else if (event === 'SIGNED_OUT') {
+                currentUser = null;
+                showLogin();
+            }
+        });
+
+        function showApp() {
+            document.getElementById('login-page').classList.add('hidden');
+            document.getElementById('main-app').classList.remove('hidden');
+            // Set tarikh harini sebagai default
+            document.getElementById('tarikh').valueAsDate = new Date();
+            // Set filter bulan harini
+            const date = new Date();
+            const monthStr = date.toISOString().slice(0, 7); // YYYY-MM
+            document.getElementById('filter-month').value = monthStr;
+        }
+
+        function showLogin() {
+            document.getElementById('login-page').classList.remove('hidden');
+            document.getElementById('main-app').classList.add('hidden');
+        }
+
+        document.getElementById('login-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const errorDiv = document.getElementById('login-error');
+            
+            errorDiv.classList.add('hidden');
+            
+            const { data, error } = await supabase.auth.signInWithPassword({
+                email: email,
+                password: password,
+            });
+
+            if (error) {
+                errorDiv.innerText = "Ralat: " + error.message;
+                errorDiv.classList.remove('hidden');
+            }
+        });
+
+        async function handleLogout() {
+            const { error } = await supabase.auth.signOut();
+            if (error) alert('Ralat log keluar');
+        }
+
+
+        // --- 2. PENGURUSAN TAB ---
+
+        function switchTab(tabName) {
+            const formBtn = document.getElementById('tab-btn-form');
+            const listBtn = document.getElementById('tab-btn-list');
+            const formContent = document.getElementById('content-form');
+            const listContent = document.getElementById('content-list');
+
+            if (tabName === 'form') {
+                formBtn.classList.add('tab-active');
+                formBtn.classList.remove('tab-inactive');
+                listBtn.classList.remove('tab-active');
+                listBtn.classList.add('tab-inactive');
+                
+                formContent.classList.remove('hidden');
+                listContent.classList.add('hidden');
+            } else {
+                listBtn.classList.add('tab-active');
+                listBtn.classList.remove('tab-inactive');
+                formBtn.classList.remove('tab-active');
+                formBtn.classList.add('tab-inactive');
+
+                formContent.classList.add('hidden');
+                listContent.classList.remove('hidden');
+                
+                // Auto load data bila buka tab list
+                fetchData();
+            }
+        }
+
+
+        // --- 3. HANTAR BORANG (INSERT) ---
+
+        document.getElementById('activity-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = document.getElementById('submit-btn');
+            btn.innerText = "Sedang Simpan...";
+            btn.disabled = true;
+
+            const formData = {
+                user_id: currentUser.id, // Pautkan rekod dengan user yg login
+                jenis_aktiviti: document.getElementById('jenis_aktiviti').value,
+                lokasi: document.getElementById('lokasi').value,
+                tarikh: document.getElementById('tarikh').value,
+                masa: document.getElementById('masa').value,
+                catatan: document.getElementById('catatan').value,
+                isu: document.getElementById('isu').value,
+                bilangan_guru: document.getElementById('bilangan_guru').value
+            };
+
+            const { data, error } = await supabase
+                .from('log_ustp')
+                .insert([formData]);
+
+            btn.innerText = "Simpan Rekod";
+            btn.disabled = false;
+
+            if (error) {
+                alert('Gagal menyimpan rekod: ' + error.message);
+            } else {
+                alert('Rekod berjaya disimpan!');
+                document.getElementById('activity-form').reset();
+                // Reset tarikh ke harini
+                document.getElementById('tarikh').valueAsDate = new Date();
+            }
+        });
+
+
+        // --- 4. LIHAT DATA (SELECT & FILTER) ---
+
+        async function fetchData() {
+            const monthInput = document.getElementById('filter-month').value;
+            if (!monthInput) return;
+
+            const tbody = document.getElementById('table-body');
+            const spinner = document.getElementById('loading-spinner');
+            const noData = document.getElementById('no-data');
+
+            // Reset UI
+            tbody.innerHTML = '';
+            spinner.classList.remove('hidden');
+            noData.classList.add('hidden');
+
+            // Kira tarikh awal dan akhir bulan
+            const [year, month] = monthInput.split('-');
+            const startDate = `${year}-${month}-01`;
+            // Trick untuk dapatkan last day of month
+            const lastDay = new Date(year, month, 0).getDate(); 
+            const endDate = `${year}-${month}-${lastDay}`;
+
+            const { data, error } = await supabase
+                .from('log_ustp')
+                .select('*')
+                .gte('tarikh', startDate)
+                .lte('tarikh', endDate)
+                .eq('user_id', currentUser.id) // Pastikan tarik data user ni saja (double protection)
+                .order('tarikh', { ascending: false });
+
+            spinner.classList.add('hidden');
+
+            if (error) {
+                alert('Ralat mengambil data: ' + error.message);
+                return;
+            }
+
+            if (data.length === 0) {
+                noData.classList.remove('hidden');
+                return;
+            }
+
+            // Render Table Rows
+            data.forEach(row => {
+                const tr = document.createElement('tr');
+                
+                // Format Tarikh
+                const dateObj = new Date(row.tarikh);
+                const displayDate = dateObj.toLocaleDateString('ms-MY');
+
+                // Badge Jenis Aktiviti
+                const badgeColor = row.jenis_aktiviti === 'Bimbingan' ? 'bg-indigo-100 text-indigo-800' : 'bg-green-100 text-green-800';
+
+                tr.innerHTML = `
+                    <td class="px-4 py-4 whitespace-nowrap">
+                        <div class="text-sm font-medium text-gray-900">${displayDate}</div>
+                        <div class="text-sm text-gray-500">${row.masa}</div>
+                    </td>
+                    <td class="px-4 py-4 whitespace-nowrap">
+                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${badgeColor}">
+                            ${row.jenis_aktiviti}
+                        </span>
+                    </td>
+                    <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
+                        ${row.lokasi}
+                    </td>
+                    <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-900 font-bold text-center">
+                        ${row.bilangan_guru}
+                    </td>
+                    <td class="px-4 py-4 text-sm text-gray-500 max-w-xs truncate">
+                        ${row.catatan}
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // Mulakan semakan user bila page load
+        checkUser();
+
+    </script>
+</body>
+</html>
