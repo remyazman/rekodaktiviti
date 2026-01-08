@@ -155,10 +155,48 @@
                 </form>
             </div>
 
-            <!-- KANDUNGAN: TAB SENARAI -->
+            <!-- KANDUNGAN: TAB SENARAI (DENGAN RUMUSAN BARU) -->
             <div id="content-list" class="hidden bg-white p-6 rounded-b-lg shadow-md">
+                
+                <!-- BAHAGIAN RUMUSAN STATISTIK (BARU) -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                    <!-- Kad 1: Jumlah Keseluruhan -->
+                    <div class="bg-blue-50 p-4 rounded-lg border border-blue-200 shadow-sm flex items-center">
+                        <div class="p-3 bg-blue-500 rounded-full text-white mr-4">
+                            <i class="fas fa-clipboard-list fa-lg"></i>
+                        </div>
+                        <div>
+                            <p class="text-xs text-gray-500 uppercase font-bold">Jumlah Rekod</p>
+                            <h3 class="text-2xl font-bold text-gray-800" id="summary-total">0</h3>
+                        </div>
+                    </div>
+                    
+                    <!-- Kad 2: Jumlah Bimbingan -->
+                    <div class="bg-indigo-50 p-4 rounded-lg border border-indigo-200 shadow-sm flex items-center">
+                        <div class="p-3 bg-indigo-500 rounded-full text-white mr-4">
+                            <i class="fas fa-chalkboard-teacher fa-lg"></i>
+                        </div>
+                        <div>
+                            <p class="text-xs text-gray-500 uppercase font-bold">Bimbingan</p>
+                            <h3 class="text-2xl font-bold text-indigo-800" id="summary-bimbingan">0</h3>
+                        </div>
+                    </div>
+
+                    <!-- Kad 3: Aktiviti Lain -->
+                    <div class="bg-green-50 p-4 rounded-lg border border-green-200 shadow-sm flex items-center">
+                        <div class="p-3 bg-green-500 rounded-full text-white mr-4">
+                            <i class="fas fa-tasks fa-lg"></i>
+                        </div>
+                        <div>
+                            <p class="text-xs text-gray-500 uppercase font-bold">Aktiviti Lain</p>
+                            <h3 class="text-2xl font-bold text-green-800" id="summary-aktiviti">0</h3>
+                        </div>
+                    </div>
+                </div>
+                <!-- TAMAT BAHAGIAN RUMUSAN -->
+
                 <div class="flex flex-col md:flex-row justify-between items-center mb-6">
-                    <h2 class="text-xl font-bold text-gray-800">Senarai Rekod</h2>
+                    <h2 class="text-xl font-bold text-gray-800">Senarai Rekod Terperinci</h2>
                     <div class="flex items-center space-x-2 mt-2 md:mt-0">
                         <label class="text-sm font-medium text-gray-600">Pilih Bulan:</label>
                         <input type="month" id="filter-month" class="border rounded p-1 text-sm">
@@ -369,13 +407,11 @@
                 });
 
                 resetForm(); 
-                // Jika update, kembali ke senarai. Jika insert, kekal di borang untuk entri seterusnya (optional).
-                // Di sini saya kekalkan logik asal: Update -> List, Insert -> Stay (tapi borang kosong).
                 if(editId) switchTab('list'); 
             }
         });
 
-        // B. Lihat Data
+        // B. Lihat Data (DIKEMASKINI DENGAN RUMUSAN)
         async function fetchData() {
             const monthInput = document.getElementById('filter-month').value;
             if (!monthInput) return;
@@ -384,9 +420,13 @@
             const spinner = document.getElementById('loading-spinner');
             const noData = document.getElementById('no-data');
 
+            // Reset UI
             tbody.innerHTML = '';
             spinner.classList.remove('hidden');
             noData.classList.add('hidden');
+            
+            // Reset Rumusan (Zeroing out)
+            updateSummary(0, 0, 0);
 
             const [year, month] = monthInput.split('-');
             const startDate = `${year}-${month}-01`;
@@ -414,6 +454,14 @@
                 noData.classList.remove('hidden');
                 return;
             }
+
+            // --- PENGIRAAN RUMUSAN BARU ---
+            const totalRekod = data.length;
+            const totalBimbingan = data.filter(r => r.jenis_aktiviti === 'Bimbingan').length;
+            const totalLain = data.filter(r => r.jenis_aktiviti !== 'Bimbingan').length;
+            
+            updateSummary(totalRekod, totalBimbingan, totalLain);
+            // ------------------------------
 
             data.forEach(row => {
                 const tr = document.createElement('tr');
@@ -454,6 +502,14 @@
                 `;
                 tbody.appendChild(tr);
             });
+        }
+
+        // FUNGSI PEMBANTU UNTUK UI RUMUSAN
+        function updateSummary(total, bimbingan, lain) {
+            // Kita gunakan animateNumber untuk efek visual (optional, tapi cantik)
+            document.getElementById('summary-total').innerText = total;
+            document.getElementById('summary-bimbingan').innerText = bimbingan;
+            document.getElementById('summary-aktiviti').innerText = lain;
         }
 
         // C. Fungsi Tindakan (Edit, Duplicate, Delete)
