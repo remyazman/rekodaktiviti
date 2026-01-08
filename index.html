@@ -8,6 +8,8 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Supabase JS -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- SweetAlert2 (Untuk Notifikasi Cantik) -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <!-- Font Awesome untuk Ikon -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
@@ -30,6 +32,10 @@
         }
         .tab-inactive {
             color: #6b7280;
+        }
+        /* Custom SweetAlert Font */
+        .swal2-popup {
+            font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
         }
     </style>
 </head>
@@ -56,7 +62,6 @@
                     Log Masuk
                 </button>
             </form>
-            <div id="login-error" class="mt-4 text-red-500 text-sm text-center hidden"></div>
         </div>
     </div>
 
@@ -94,8 +99,8 @@
             <div id="content-form" class="bg-white p-6 rounded-b-lg shadow-md max-w-4xl mx-auto">
                 <div class="flex justify-between items-center mb-4 border-b pb-2">
                     <h2 class="text-xl font-bold text-gray-800" id="form-title">Borang Aktiviti Harian</h2>
-                    <button id="cancel-edit-btn" onclick="cancelEdit()" class="hidden text-sm text-red-600 hover:text-red-800 underline">
-                        Batal Edit
+                    <button id="cancel-edit-btn" onclick="cancelEdit()" class="hidden text-sm text-red-600 hover:text-red-800 underline font-medium">
+                        Batal
                     </button>
                 </div>
 
@@ -190,15 +195,14 @@
     <!-- LOGIK JAVASCRIPT GABUNGAN -->
     <script>
         // --- KONFIGURASI SUPABASE ---
-        
         const supabaseUrl = 'https://orfvatacivcnzzhxhtbp.supabase.co';
         const supabaseKey = 'sb_publishable_8HYoJecsafWQSSpisJeXgw_4L-qR18b'; 
         
         const supabaseClient = supabase.createClient(supabaseUrl, supabaseKey);
 
         let currentUser = null;
-        let currentRecords = []; // Simpan data yang ditarik untuk rujukan edit/copy
-        let editId = null; // ID rekod yang sedang diedit
+        let currentRecords = []; 
+        let editId = null; 
 
         // --- 1. PENGURUSAN LOG MASUK/KELUAR ---
         
@@ -212,7 +216,6 @@
             }
         }
 
-        // Dengar perubahan status auth
         supabaseClient.auth.onAuthStateChange((event, session) => {
             if (event === 'SIGNED_IN') {
                 currentUser = session.user;
@@ -226,13 +229,11 @@
         function showApp() {
             document.getElementById('login-page').classList.add('hidden');
             document.getElementById('main-app').classList.remove('hidden');
-            // Set tarikh harini sebagai default jika bukan mod edit
             if (!editId) {
                 document.getElementById('tarikh').valueAsDate = new Date();
             }
-            // Set filter bulan harini
             const date = new Date();
-            const monthStr = date.toISOString().slice(0, 7); // YYYY-MM
+            const monthStr = date.toISOString().slice(0, 7); 
             document.getElementById('filter-month').value = monthStr;
         }
 
@@ -245,9 +246,6 @@
             e.preventDefault();
             const email = document.getElementById('email').value;
             const password = document.getElementById('password').value;
-            const errorDiv = document.getElementById('login-error');
-            
-            errorDiv.classList.add('hidden');
             
             const { data, error } = await supabaseClient.auth.signInWithPassword({
                 email: email,
@@ -255,14 +253,34 @@
             });
 
             if (error) {
-                errorDiv.innerText = "Ralat: " + error.message;
-                errorDiv.classList.remove('hidden');
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Gagal Log Masuk',
+                    text: 'Sila semak emel dan kata laluan anda.',
+                });
+            } else {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Selamat Datang',
+                    text: 'Log masuk berjaya!',
+                    timer: 1500,
+                    showConfirmButton: false
+                });
             }
         });
 
         async function handleLogout() {
             const { error } = await supabaseClient.auth.signOut();
-            if (error) alert('Ralat log keluar');
+            if (error) {
+                Swal.fire('Ralat', 'Gagal log keluar', 'error');
+            } else {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Jumpa Lagi!',
+                    timer: 1500,
+                    showConfirmButton: false
+                });
+            }
         }
 
 
@@ -283,10 +301,6 @@
                 formContent.classList.remove('hidden');
                 listContent.classList.add('hidden');
             } else {
-                // Jika sedang edit dan tukar ke list, jangan batal edit, cuma tukar view
-                // Tapi UI lebih kemas jika pengguna fokus pada satu task.
-                // Kita biarkan editId kekal.
-
                 listBtn.classList.add('tab-active');
                 listBtn.classList.remove('tab-inactive');
                 formBtn.classList.remove('tab-active');
@@ -295,7 +309,6 @@
                 formContent.classList.add('hidden');
                 listContent.classList.remove('hidden');
                 
-                // Auto load data bila buka tab list
                 fetchData();
             }
         }
@@ -343,11 +356,22 @@
             btn.disabled = false;
 
             if (error) {
-                alert('Gagal: ' + error.message);
+                Swal.fire('Gagal!', error.message, 'error');
             } else {
-                alert(editId ? 'Rekod berjaya dikemaskini!' : 'Rekod berjaya disimpan!');
-                resetForm(); // Reset borang dan mode edit
-                if(editId) switchTab('list'); // Jika update, terus ke list
+                const action = editId ? 'dikemaskini' : 'disimpan';
+                
+                await Swal.fire({
+                    icon: 'success',
+                    title: 'Berjaya!',
+                    text: `Rekod telah berjaya ${action}.`,
+                    timer: 2000,
+                    showConfirmButton: false
+                });
+
+                resetForm(); 
+                // Jika update, kembali ke senarai. Jika insert, kekal di borang untuk entri seterusnya (optional).
+                // Di sini saya kekalkan logik asal: Update -> List, Insert -> Stay (tapi borang kosong).
+                if(editId) switchTab('list'); 
             }
         });
 
@@ -360,7 +384,6 @@
             const spinner = document.getElementById('loading-spinner');
             const noData = document.getElementById('no-data');
 
-            // Reset UI
             tbody.innerHTML = '';
             spinner.classList.remove('hidden');
             noData.classList.add('hidden');
@@ -381,11 +404,10 @@
             spinner.classList.add('hidden');
 
             if (error) {
-                alert('Ralat mengambil data: ' + error.message);
+                Swal.fire('Ralat', 'Gagal mengambil data: ' + error.message, 'error');
                 return;
             }
 
-            // Simpan data untuk rujukan local
             currentRecords = data; 
 
             if (data.length === 0) {
@@ -393,15 +415,10 @@
                 return;
             }
 
-            // Render Table Rows
             data.forEach(row => {
                 const tr = document.createElement('tr');
-                
-                // Format Tarikh
                 const dateObj = new Date(row.tarikh);
                 const displayDate = dateObj.toLocaleDateString('ms-MY');
-
-                // Badge Jenis Aktiviti
                 const badgeColor = row.jenis_aktiviti === 'Bimbingan' ? 'bg-indigo-100 text-indigo-800' : 'bg-green-100 text-green-800';
 
                 tr.innerHTML = `
@@ -427,10 +444,10 @@
                         <button onclick="startEdit(${row.id})" class="text-blue-600 hover:text-blue-900 mx-1" title="Edit">
                             <i class="fas fa-edit fa-lg"></i>
                         </button>
-                        <button onclick="copyToClipboard(${row.id})" class="text-gray-600 hover:text-gray-900 mx-1" title="Copy">
+                        <button onclick="duplicateRecord(${row.id})" class="text-green-600 hover:text-green-900 mx-1" title="Salin & Buat Baru">
                             <i class="fas fa-copy fa-lg"></i>
                         </button>
-                        <button onclick="deleteRecord(${row.id})" class="text-red-600 hover:text-red-900 mx-1" title="Delete">
+                        <button onclick="deleteRecord(${row.id})" class="text-red-600 hover:text-red-900 mx-1" title="Padam">
                             <i class="fas fa-trash-alt fa-lg"></i>
                         </button>
                     </td>
@@ -439,34 +456,71 @@
             });
         }
 
-        // C. Fungsi Tindakan (Edit, Copy, Delete)
+        // C. Fungsi Tindakan (Edit, Duplicate, Delete)
 
+        // 1. EDIT: Mengemaskini rekod sedia ada
         window.startEdit = function(id) {
             const record = currentRecords.find(r => r.id === id);
             if (!record) return;
 
-            // Set Data ke Form
-            document.getElementById('jenis_aktiviti').value = record.jenis_aktiviti;
-            document.getElementById('bilangan_guru').value = record.bilangan_guru;
-            document.getElementById('lokasi').value = record.lokasi;
-            document.getElementById('tarikh').value = record.tarikh;
-            document.getElementById('masa').value = record.masa; // Pastikan format HH:MM:SS
-            document.getElementById('catatan').value = record.catatan;
-            document.getElementById('isu').value = record.isu;
+            populateForm(record);
 
-            // Tukar UI kepada Mod Edit
             editId = id;
             document.getElementById('form-title').innerText = "Kemaskini Rekod";
             document.getElementById('submit-btn').innerText = "Kemaskini Rekod";
-            document.getElementById('submit-btn').classList.remove('bg-green-600', 'hover:bg-green-700');
-            document.getElementById('submit-btn').classList.add('bg-blue-600', 'hover:bg-blue-700');
-            document.getElementById('cancel-edit-btn').classList.remove('hidden');
+            document.getElementById('submit-btn').className = "w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded shadow transition";
+            
+            const cancelBtn = document.getElementById('cancel-edit-btn');
+            cancelBtn.innerText = "Batal Edit";
+            cancelBtn.classList.remove('hidden');
 
             switchTab('form');
         }
 
+        // 2. DUPLICATE: Mengambil data lama, tapi simpan sebagai baru
+        window.duplicateRecord = function(id) {
+            const record = currentRecords.find(r => r.id === id);
+            if (!record) return;
+
+            populateForm(record);
+
+            // PENTING: Set editId kepada null supaya ia INSERT, bukan UPDATE
+            editId = null; 
+
+            document.getElementById('form-title').innerText = "Salin Rekod (Simpan Sebagai Baru)";
+            document.getElementById('submit-btn').innerText = "Simpan Rekod Baru";
+            document.getElementById('submit-btn').className = "w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded shadow transition";
+
+            const cancelBtn = document.getElementById('cancel-edit-btn');
+            cancelBtn.innerText = "Batal Salin";
+            cancelBtn.classList.remove('hidden');
+
+            switchTab('form');
+
+            Swal.fire({
+                icon: 'info',
+                title: 'Mod Duplikasi',
+                text: 'Maklumat telah disalin ke borang. Sila ubah (contohnya tarikh) dan simpan.',
+                timer: 3000,
+                showConfirmButton: false,
+                toast: true,
+                position: 'top-end'
+            });
+        }
+
+        function populateForm(record) {
+            document.getElementById('jenis_aktiviti').value = record.jenis_aktiviti;
+            document.getElementById('bilangan_guru').value = record.bilangan_guru;
+            document.getElementById('lokasi').value = record.lokasi;
+            document.getElementById('tarikh').value = record.tarikh;
+            document.getElementById('masa').value = record.masa;
+            document.getElementById('catatan').value = record.catatan;
+            document.getElementById('isu').value = record.isu;
+        }
+
         window.cancelEdit = function() {
             resetForm();
+            Swal.fire('Dibatalkan', 'Borang telah dikosongkan.', 'info');
         }
 
         function resetForm() {
@@ -474,44 +528,42 @@
             editId = null;
             document.getElementById('form-title').innerText = "Borang Aktiviti Harian";
             document.getElementById('submit-btn').innerText = "Simpan Rekod";
-            document.getElementById('submit-btn').classList.add('bg-green-600', 'hover:bg-green-700');
-            document.getElementById('submit-btn').classList.remove('bg-blue-600', 'hover:bg-blue-700');
+            document.getElementById('submit-btn').className = "w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded shadow transition";
             document.getElementById('cancel-edit-btn').classList.add('hidden');
-            
-            // Set semula tarikh hari ini
             document.getElementById('tarikh').valueAsDate = new Date();
         }
 
-        window.copyToClipboard = function(id) {
-            const record = currentRecords.find(r => r.id === id);
-            if (!record) return;
-
-            const text = `*Laporan Aktiviti USTP*\n\n📅 Tarikh: ${record.tarikh}\n⏰ Masa: ${record.masa}\n📍 Lokasi: ${record.lokasi}\n📂 Jenis: ${record.jenis_aktiviti}\n👥 Bil. Guru: ${record.bilangan_guru}\n\n📝 Catatan:\n${record.catatan}\n\n⚠️ Isu/Tindakan:\n${record.isu}`;
-
-            navigator.clipboard.writeText(text).then(() => {
-                alert('Maklumat berjaya disalin!');
-            }, (err) => {
-                alert('Gagal menyalin: ', err);
-            });
-        }
-
         window.deleteRecord = async function(id) {
-            if (confirm("Adakah anda pasti mahu memadam rekod ini? Tindakan ini tidak boleh diundur.")) {
+            const result = await Swal.fire({
+                title: 'Anda pasti?',
+                text: "Rekod ini akan dipadam kekal dan tidak boleh dikembalikan!",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#d33',
+                cancelButtonColor: '#3085d6',
+                confirmButtonText: 'Ya, Padam!',
+                cancelButtonText: 'Batal'
+            });
+
+            if (result.isConfirmed) {
                 const { error } = await supabaseClient
                     .from('log_ustp')
                     .delete()
                     .eq('id', id);
 
                 if (error) {
-                    alert('Gagal memadam: ' + error.message);
+                    Swal.fire('Ralat', 'Gagal memadam: ' + error.message, 'error');
                 } else {
-                    alert('Rekod dipadam.');
-                    fetchData(); // Refresh table
+                    Swal.fire(
+                        'Dipadam!',
+                        'Rekod telah berjaya dipadam.',
+                        'success'
+                    );
+                    fetchData(); 
                 }
             }
         }
 
-        // Mulakan semakan user bila page load
         checkUser();
 
     </script>
