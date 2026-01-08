@@ -78,7 +78,7 @@
             </div>
         </nav>
 
-        <div class="max-w-4xl mx-auto mt-6 px-4 mb-10">
+        <div class="max-w-6xl mx-auto mt-6 px-4 mb-10">
             
             <!-- Tab Navigation -->
             <div class="flex border-b border-gray-200 mb-6 bg-white rounded-t-lg shadow-sm">
@@ -91,8 +91,14 @@
             </div>
 
             <!-- KANDUNGAN: TAB BORANG -->
-            <div id="content-form" class="bg-white p-6 rounded-b-lg shadow-md">
-                <h2 class="text-xl font-bold mb-4 text-gray-800 border-b pb-2">Borang Aktiviti Harian</h2>
+            <div id="content-form" class="bg-white p-6 rounded-b-lg shadow-md max-w-4xl mx-auto">
+                <div class="flex justify-between items-center mb-4 border-b pb-2">
+                    <h2 class="text-xl font-bold text-gray-800" id="form-title">Borang Aktiviti Harian</h2>
+                    <button id="cancel-edit-btn" onclick="cancelEdit()" class="hidden text-sm text-red-600 hover:text-red-800 underline">
+                        Batal Edit
+                    </button>
+                </div>
+
                 <form id="activity-form" class="space-y-4">
                     
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -162,8 +168,9 @@
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tarikh/Masa</th>
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Aktiviti</th>
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Lokasi</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Bil. Guru</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider text-center">Bil. Guru</th>
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Catatan</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider text-center">Tindakan</th>
                             </tr>
                         </thead>
                         <tbody id="table-body" class="bg-white divide-y divide-gray-200">
@@ -183,7 +190,6 @@
     <!-- LOGIK JAVASCRIPT GABUNGAN -->
     <script>
         // --- KONFIGURASI SUPABASE ---
-        // Kita namakan variable ini 'supabaseClient' untuk elak konflik dengan library 'supabase'
         
         const supabaseUrl = 'https://orfvatacivcnzzhxhtbp.supabase.co';
         const supabaseKey = 'sb_publishable_8HYoJecsafWQSSpisJeXgw_4L-qR18b'; 
@@ -191,6 +197,8 @@
         const supabaseClient = supabase.createClient(supabaseUrl, supabaseKey);
 
         let currentUser = null;
+        let currentRecords = []; // Simpan data yang ditarik untuk rujukan edit/copy
+        let editId = null; // ID rekod yang sedang diedit
 
         // --- 1. PENGURUSAN LOG MASUK/KELUAR ---
         
@@ -218,8 +226,10 @@
         function showApp() {
             document.getElementById('login-page').classList.add('hidden');
             document.getElementById('main-app').classList.remove('hidden');
-            // Set tarikh harini sebagai default
-            document.getElementById('tarikh').valueAsDate = new Date();
+            // Set tarikh harini sebagai default jika bukan mod edit
+            if (!editId) {
+                document.getElementById('tarikh').valueAsDate = new Date();
+            }
             // Set filter bulan harini
             const date = new Date();
             const monthStr = date.toISOString().slice(0, 7); // YYYY-MM
@@ -273,6 +283,10 @@
                 formContent.classList.remove('hidden');
                 listContent.classList.add('hidden');
             } else {
+                // Jika sedang edit dan tukar ke list, jangan batal edit, cuma tukar view
+                // Tapi UI lebih kemas jika pengguna fokus pada satu task.
+                // Kita biarkan editId kekal.
+
                 listBtn.classList.add('tab-active');
                 listBtn.classList.remove('tab-inactive');
                 formBtn.classList.remove('tab-active');
@@ -287,16 +301,18 @@
         }
 
 
-        // --- 3. HANTAR BORANG (INSERT) ---
+        // --- 3. PENGURUSAN DATA (CRUD) ---
 
+        // A. Hantar / Kemaskini Borang
         document.getElementById('activity-form').addEventListener('submit', async (e) => {
             e.preventDefault();
             const btn = document.getElementById('submit-btn');
-            btn.innerText = "Sedang Simpan...";
+            const originalText = btn.innerText;
+            btn.innerText = editId ? "Sedang Kemaskini..." : "Sedang Simpan...";
             btn.disabled = true;
 
             const formData = {
-                user_id: currentUser.id, // Pautkan rekod dengan user yg login
+                user_id: currentUser.id,
                 jenis_aktiviti: document.getElementById('jenis_aktiviti').value,
                 lokasi: document.getElementById('lokasi').value,
                 tarikh: document.getElementById('tarikh').value,
@@ -306,26 +322,36 @@
                 bilangan_guru: document.getElementById('bilangan_guru').value
             };
 
-            const { data, error } = await supabaseClient
-                .from('log_ustp')
-                .insert([formData]);
+            let error;
+            
+            if (editId) {
+                // UPDATE
+                const { error: updateError } = await supabaseClient
+                    .from('log_ustp')
+                    .update(formData)
+                    .eq('id', editId);
+                error = updateError;
+            } else {
+                // INSERT
+                const { error: insertError } = await supabaseClient
+                    .from('log_ustp')
+                    .insert([formData]);
+                error = insertError;
+            }
 
-            btn.innerText = "Simpan Rekod";
+            btn.innerText = originalText;
             btn.disabled = false;
 
             if (error) {
-                alert('Gagal menyimpan rekod: ' + error.message);
+                alert('Gagal: ' + error.message);
             } else {
-                alert('Rekod berjaya disimpan!');
-                document.getElementById('activity-form').reset();
-                // Reset tarikh ke harini
-                document.getElementById('tarikh').valueAsDate = new Date();
+                alert(editId ? 'Rekod berjaya dikemaskini!' : 'Rekod berjaya disimpan!');
+                resetForm(); // Reset borang dan mode edit
+                if(editId) switchTab('list'); // Jika update, terus ke list
             }
         });
 
-
-        // --- 4. LIHAT DATA (SELECT & FILTER) ---
-
+        // B. Lihat Data
         async function fetchData() {
             const monthInput = document.getElementById('filter-month').value;
             if (!monthInput) return;
@@ -339,10 +365,8 @@
             spinner.classList.remove('hidden');
             noData.classList.add('hidden');
 
-            // Kira tarikh awal dan akhir bulan
             const [year, month] = monthInput.split('-');
             const startDate = `${year}-${month}-01`;
-            // Trick untuk dapatkan last day of month
             const lastDay = new Date(year, month, 0).getDate(); 
             const endDate = `${year}-${month}-${lastDay}`;
 
@@ -351,7 +375,7 @@
                 .select('*')
                 .gte('tarikh', startDate)
                 .lte('tarikh', endDate)
-                .eq('user_id', currentUser.id) // Pastikan tarik data user ni saja
+                .eq('user_id', currentUser.id)
                 .order('tarikh', { ascending: false });
 
             spinner.classList.add('hidden');
@@ -360,6 +384,9 @@
                 alert('Ralat mengambil data: ' + error.message);
                 return;
             }
+
+            // Simpan data untuk rujukan local
+            currentRecords = data; 
 
             if (data.length === 0) {
                 noData.classList.remove('hidden');
@@ -396,9 +423,92 @@
                     <td class="px-4 py-4 text-sm text-gray-500 max-w-xs truncate">
                         ${row.catatan}
                     </td>
+                    <td class="px-4 py-4 whitespace-nowrap text-center text-sm font-medium">
+                        <button onclick="startEdit(${row.id})" class="text-blue-600 hover:text-blue-900 mx-1" title="Edit">
+                            <i class="fas fa-edit fa-lg"></i>
+                        </button>
+                        <button onclick="copyToClipboard(${row.id})" class="text-gray-600 hover:text-gray-900 mx-1" title="Copy">
+                            <i class="fas fa-copy fa-lg"></i>
+                        </button>
+                        <button onclick="deleteRecord(${row.id})" class="text-red-600 hover:text-red-900 mx-1" title="Delete">
+                            <i class="fas fa-trash-alt fa-lg"></i>
+                        </button>
+                    </td>
                 `;
                 tbody.appendChild(tr);
             });
+        }
+
+        // C. Fungsi Tindakan (Edit, Copy, Delete)
+
+        window.startEdit = function(id) {
+            const record = currentRecords.find(r => r.id === id);
+            if (!record) return;
+
+            // Set Data ke Form
+            document.getElementById('jenis_aktiviti').value = record.jenis_aktiviti;
+            document.getElementById('bilangan_guru').value = record.bilangan_guru;
+            document.getElementById('lokasi').value = record.lokasi;
+            document.getElementById('tarikh').value = record.tarikh;
+            document.getElementById('masa').value = record.masa; // Pastikan format HH:MM:SS
+            document.getElementById('catatan').value = record.catatan;
+            document.getElementById('isu').value = record.isu;
+
+            // Tukar UI kepada Mod Edit
+            editId = id;
+            document.getElementById('form-title').innerText = "Kemaskini Rekod";
+            document.getElementById('submit-btn').innerText = "Kemaskini Rekod";
+            document.getElementById('submit-btn').classList.remove('bg-green-600', 'hover:bg-green-700');
+            document.getElementById('submit-btn').classList.add('bg-blue-600', 'hover:bg-blue-700');
+            document.getElementById('cancel-edit-btn').classList.remove('hidden');
+
+            switchTab('form');
+        }
+
+        window.cancelEdit = function() {
+            resetForm();
+        }
+
+        function resetForm() {
+            document.getElementById('activity-form').reset();
+            editId = null;
+            document.getElementById('form-title').innerText = "Borang Aktiviti Harian";
+            document.getElementById('submit-btn').innerText = "Simpan Rekod";
+            document.getElementById('submit-btn').classList.add('bg-green-600', 'hover:bg-green-700');
+            document.getElementById('submit-btn').classList.remove('bg-blue-600', 'hover:bg-blue-700');
+            document.getElementById('cancel-edit-btn').classList.add('hidden');
+            
+            // Set semula tarikh hari ini
+            document.getElementById('tarikh').valueAsDate = new Date();
+        }
+
+        window.copyToClipboard = function(id) {
+            const record = currentRecords.find(r => r.id === id);
+            if (!record) return;
+
+            const text = `*Laporan Aktiviti USTP*\n\n📅 Tarikh: ${record.tarikh}\n⏰ Masa: ${record.masa}\n📍 Lokasi: ${record.lokasi}\n📂 Jenis: ${record.jenis_aktiviti}\n👥 Bil. Guru: ${record.bilangan_guru}\n\n📝 Catatan:\n${record.catatan}\n\n⚠️ Isu/Tindakan:\n${record.isu}`;
+
+            navigator.clipboard.writeText(text).then(() => {
+                alert('Maklumat berjaya disalin!');
+            }, (err) => {
+                alert('Gagal menyalin: ', err);
+            });
+        }
+
+        window.deleteRecord = async function(id) {
+            if (confirm("Adakah anda pasti mahu memadam rekod ini? Tindakan ini tidak boleh diundur.")) {
+                const { error } = await supabaseClient
+                    .from('log_ustp')
+                    .delete()
+                    .eq('id', id);
+
+                if (error) {
+                    alert('Gagal memadam: ' + error.message);
+                } else {
+                    alert('Rekod dipadam.');
+                    fetchData(); // Refresh table
+                }
+            }
         }
 
         // Mulakan semakan user bila page load
